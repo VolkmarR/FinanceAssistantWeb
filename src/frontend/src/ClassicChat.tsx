@@ -6,7 +6,10 @@ interface Message {
   content: string;
 }
 
-export default function App() {
+// The original hand-rolled chat: talks to POST /api/chat (plain-text SSE) and
+// parses the stream by hand. Kept verbatim so the "Classic" route is an exact
+// before-picture next to the TanStack AI / AG-UI version.
+export default function ClassicChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -66,9 +69,7 @@ export default function App() {
   }
 
   return (
-    <main style={{ maxWidth: 640, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif" }}>
-      <h1>Finance Assistant</h1>
-
+    <>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         {messages.map((m, i) => (
           <div key={i} style={{ textAlign: m.role === "user" ? "right" : "left" }}>
@@ -99,7 +100,7 @@ export default function App() {
           Send
         </button>
       </form>
-    </main>
+    </>
   );
 }
 
