@@ -16,6 +16,9 @@ public sealed class AgentChatService
     private readonly ChatClientAgent _agent;
     private readonly ConcurrentDictionary<string, AgentSession> _sessions = new();
 
+    // Exposed so the AG-UI endpoint can host the same configured agent (tools, prompt, approvals).
+    public AIAgent Agent => _agent;
+
     public AgentChatService(
         IChatClient chatClient,
         IEmbeddingGenerator<string, Embedding<float>> embedder)

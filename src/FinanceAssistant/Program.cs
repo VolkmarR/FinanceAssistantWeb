@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FinanceAssistant.Data;
 using FinanceAssistant.Services;
+using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Pgvector;
@@ -20,6 +21,9 @@ builder.Services.AddEmbeddingGenerator(builder.Configuration);
 
 // One agent + per-session conversation store shared across requests.
 builder.Services.AddSingleton<AgentChatService>();
+
+// AG-UI protocol services (typed event SSE) for the /api/agui endpoint mapped below.
+builder.Services.AddAGUI();
 
 // Allow the Vite dev server (separate origin) to call the API during development.
 // In production the SPA is served from wwwroot, so it is same-origin and CORS is moot.
@@ -80,6 +84,10 @@ app.MapPost("/api/chat", async (ChatRequest request, AgentChatService chat, Http
         // Client disconnected mid-stream. Nothing to do — the response is already gone.
     }
 });
+
+// POST /api/agui — exposes the same agent over the AG-UI protocol (typed SSE events).
+var agentChat = app.Services.GetRequiredService<AgentChatService>();
+app.MapAGUI("/api/agui", agentChat.Agent);
 
 // SPA fallback so client-side routes resolve to the React entry point.
 app.MapFallbackToFile("index.html");
