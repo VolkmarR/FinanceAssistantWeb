@@ -1,7 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -16,14 +15,13 @@
     <PackageReference Include="Microsoft.Agents.AI" Version="1.11.1" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.6.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.7" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.7" />
+    <!-- Microsoft.Extensions.Configuration.* and DependencyInjection are provided by the
+         ASP.NET Core (Microsoft.NET.Sdk.Web) framework reference, so explicit package
+         references would be redundant (NU1510). The AddUserSecrets/AddSingleton APIs
+         remain available via the shared framework. -->
   </ItemGroup>
 
   <ItemGroup>

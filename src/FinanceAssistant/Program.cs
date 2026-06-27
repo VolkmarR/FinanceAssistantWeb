@@ -1,39 +1,108 @@
-using Pgvector;
+using System.Text.Json;
 using FinanceAssistant.Data;
-using Microsoft.Extensions.Configuration;
-using FinanceAssistant.Tools;
-using Microsoft.Agents.AI;
+using FinanceAssistant.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DependencyInjection;
+using Pgvector;
 
-await using (var db = new FinanceDbContext())
+const string DevCorsPolicy = "ViteDev";
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Preserve the console app's configuration sources so the same AzureOpenAI:* secrets work.
+builder.Configuration
+    .AddUserSecrets<Program>(optional: true)
+    .AddEnvironmentVariables();
+
+// Reuse the existing DI extensions unchanged (ServiceCollectionExtensions.cs).
+builder.Services.AddChatClient(builder.Configuration);
+builder.Services.AddEmbeddingGenerator(builder.Configuration);
+
+// One agent + per-session conversation store shared across requests.
+builder.Services.AddSingleton<AgentChatService>();
+
+// Allow the Vite dev server (separate origin) to call the API during development.
+// In production the SPA is served from wwwroot, so it is same-origin and CORS is moot.
+builder.Services.AddCors(options =>
 {
-    await db.Database.EnsureCreatedAsync();
+    options.AddPolicy(DevCorsPolicy, policy => policy
+        .WithOrigins("http://localhost:5173")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
+var app = builder.Build();
+
+// Startup warm-up: create the schema and embed any transactions that lack an embedding.
+// Ported verbatim from the console Program.cs so semantic search works on first run.
+await WarmUpAsync(app);
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(DevCorsPolicy);
 }
 
-var config = new ConfigurationBuilder()
-    .AddUserSecrets<Program>(optional: true)
-    .AddEnvironmentVariables()
-    .Build();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
-var services = new ServiceCollection();
-services.AddChatClient(config);
-services.AddEmbeddingGenerator(config);
-
-var provider = services.BuildServiceProvider();
-
-var embedder = provider.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
-
-await using (var db = new FinanceDbContext())
+// POST /api/chat — streams the assistant reply as Server-Sent Events.
+app.MapPost("/api/chat", async (ChatRequest request, AgentChatService chat, HttpContext http) =>
 {
-    var unembedded = await db.Transactions
+    if (string.IsNullOrWhiteSpace(request.Message))
+    {
+        http.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await http.Response.WriteAsync("message is required");
+        return;
+    }
+
+    var sessionId = string.IsNullOrWhiteSpace(request.SessionId) ? "default" : request.SessionId;
+
+    http.Response.ContentType = "text/event-stream";
+    http.Response.Headers.CacheControl = "no-cache";
+    http.Response.Headers.Connection = "keep-alive";
+
+    var ct = http.RequestAborted;
+
+    try
+    {
+        await foreach (var chunk in chat.StreamReplyAsync(sessionId, request.Message, ct))
+        {
+            // One SSE "data:" frame per chunk; JSON-encoding keeps newlines/quotes intact.
+            await http.Response.WriteAsync($"data: {JsonSerializer.Serialize(chunk)}\n\n", ct);
+            await http.Response.Body.FlushAsync(ct);
+        }
+
+        await http.Response.WriteAsync("event: done\ndata: [DONE]\n\n", ct);
+        await http.Response.Body.FlushAsync(ct);
+    }
+    catch (OperationCanceledException)
+    {
+        // Client disconnected mid-stream. Nothing to do — the response is already gone.
+    }
+});
+
+// SPA fallback so client-side routes resolve to the React entry point.
+app.MapFallbackToFile("index.html");
+
+app.Run();
+
+static async Task WarmUpAsync(WebApplication app)
+{
+    await using (var db = new FinanceDbContext())
+    {
+        await db.Database.EnsureCreatedAsync();
+    }
+
+    var embedder = app.Services.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
+
+    await using var seedDb = new FinanceDbContext();
+    var unembedded = await seedDb.Transactions
         .Where(t => t.Embedding == null)
         .ToListAsync();
 
     if (unembedded.Count > 0)
     {
-        Console.WriteLine($"Embedding {unembedded.Count} transactions...");
+        app.Logger.LogInformation("Embedding {Count} transactions...", unembedded.Count);
         var texts = unembedded.Select(t => $"{t.Merchant} {t.Description}").ToList();
         var embeddings = await embedder.GenerateAsync(texts);
         for (int i = 0; i < unembedded.Count; i++)
@@ -41,61 +110,10 @@ await using (var db = new FinanceDbContext())
             unembedded[i].Embedding = new Vector(embeddings[i].Vector.ToArray());
         }
 
-        await db.SaveChangesAsync();
-        Console.WriteLine($"Embedded {unembedded.Count} transactions.");
+        await seedDb.SaveChangesAsync();
+        app.Logger.LogInformation("Embedded {Count} transactions.", unembedded.Count);
     }
 }
 
-var chatClient = provider.GetRequiredService<IChatClient>();
-
-var convertCurrency = new ConvertCurrencyTool();
-var getCurrentTime = new CurrentTimeTool();
-var getTransactions = new GetTransactionsTool();
-var searchTransactions = new SearchTransactionsTool(embedder);
-var importStatementTool = new ImportStatementTool(chatClient);
-var importXmlStatementTool = new ImportXmlStatementTool(importStatementTool);
-var importXlsxStatementTool = new ImportXlsxStatementTool(importStatementTool);
-var transferFunds = new TransferFundsTool();
-
-var systemPrompt = await File.ReadAllTextAsync(
-    Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
-
-var agent = new ChatClientAgent(
-    chatClient,
-    systemPrompt,
-    name: "FinanceAssistant",
-    description: "Personal finance assistant",
-    tools:
-    [
-        AIFunctionFactory.Create(convertCurrency.Convert),
-        AIFunctionFactory.Create(getCurrentTime.GetCurrentTime),
-        AIFunctionFactory.Create(getTransactions.GetTransactions),
-        AIFunctionFactory.Create(searchTransactions.SearchTransactions),
-        AIFunctionFactory.Create(importStatementTool.ImportStatement),
-        AIFunctionFactory.Create(importXmlStatementTool.ImportXmlStatement),
-        AIFunctionFactory.Create(importXlsxStatementTool.ImportXlsxStatement),
-        new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
-    ]);
-
-var session = await agent.CreateSessionAsync();
-
-Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
-
-while (true)
-{
-    Console.Write("> ");
-    var input = Console.ReadLine();
-    if (input is null || string.Equals(input.Trim(), "exit", StringComparison.OrdinalIgnoreCase))
-    {
-        break;
-    }
-
-    await foreach (var update in agent.RunStreamingAsync(input, session))
-    {
-        Console.Write(update.Text);
-    }
-
-    Console.WriteLine();
-}
-
-return 0;
+// Minimal API request body for the chat endpoint.
+internal sealed record ChatRequest(string? SessionId, string Message);

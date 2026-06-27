@@ -437,3 +437,7 @@ FodyWeavers.xsd
 *.db-shm
 *.db-wal
 .claude/settings.local.json
+
+# React frontend build output (Vite emits the SPA into the backend's wwwroot)
+src/FinanceAssistant/wwwroot/
+src/frontend/dist/
