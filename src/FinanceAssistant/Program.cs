@@ -1,0 +1,101 @@
+using Pgvector;
+using FinanceAssistant.Data;
+using Microsoft.Extensions.Configuration;
+using FinanceAssistant.Tools;
+using Microsoft.Agents.AI;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+
+await using (var db = new FinanceDbContext())
+{
+    await db.Database.EnsureCreatedAsync();
+}
+
+var config = new ConfigurationBuilder()
+    .AddUserSecrets<Program>(optional: true)
+    .AddEnvironmentVariables()
+    .Build();
+
+var services = new ServiceCollection();
+services.AddChatClient(config);
+services.AddEmbeddingGenerator(config);
+
+var provider = services.BuildServiceProvider();
+
+var embedder = provider.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
+
+await using (var db = new FinanceDbContext())
+{
+    var unembedded = await db.Transactions
+        .Where(t => t.Embedding == null)
+        .ToListAsync();
+
+    if (unembedded.Count > 0)
+    {
+        Console.WriteLine($"Embedding {unembedded.Count} transactions...");
+        var texts = unembedded.Select(t => $"{t.Merchant} {t.Description}").ToList();
+        var embeddings = await embedder.GenerateAsync(texts);
+        for (int i = 0; i < unembedded.Count; i++)
+        {
+            unembedded[i].Embedding = new Vector(embeddings[i].Vector.ToArray());
+        }
+
+        await db.SaveChangesAsync();
+        Console.WriteLine($"Embedded {unembedded.Count} transactions.");
+    }
+}
+
+var chatClient = provider.GetRequiredService<IChatClient>();
+
+var convertCurrency = new ConvertCurrencyTool();
+var getCurrentTime = new CurrentTimeTool();
+var getTransactions = new GetTransactionsTool();
+var searchTransactions = new SearchTransactionsTool(embedder);
+var importStatementTool = new ImportStatementTool(chatClient);
+var importXmlStatementTool = new ImportXmlStatementTool(importStatementTool);
+var importXlsxStatementTool = new ImportXlsxStatementTool(importStatementTool);
+var transferFunds = new TransferFundsTool();
+
+var systemPrompt = await File.ReadAllTextAsync(
+    Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
+
+var agent = new ChatClientAgent(
+    chatClient,
+    systemPrompt,
+    name: "FinanceAssistant",
+    description: "Personal finance assistant",
+    tools:
+    [
+        AIFunctionFactory.Create(convertCurrency.Convert),
+        AIFunctionFactory.Create(getCurrentTime.GetCurrentTime),
+        AIFunctionFactory.Create(getTransactions.GetTransactions),
+        AIFunctionFactory.Create(searchTransactions.SearchTransactions),
+        AIFunctionFactory.Create(importStatementTool.ImportStatement),
+        AIFunctionFactory.Create(importXmlStatementTool.ImportXmlStatement),
+        AIFunctionFactory.Create(importXlsxStatementTool.ImportXlsxStatement),
+        new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
+    ]);
+
+var session = await agent.CreateSessionAsync();
+
+Console.WriteLine("Finance assistant. Type a message, or 'exit' to quit.");
+
+while (true)
+{
+    Console.Write("> ");
+    var input = Console.ReadLine();
+    if (input is null || string.Equals(input.Trim(), "exit", StringComparison.OrdinalIgnoreCase))
+    {
+        break;
+    }
+
+    await foreach (var update in agent.RunStreamingAsync(input, session))
+    {
+        Console.Write(update.Text);
+    }
+
+    Console.WriteLine();
+}
+
+return 0;
