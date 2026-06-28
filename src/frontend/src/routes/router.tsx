@@ -5,6 +5,8 @@ import {
   redirect,
   Outlet,
 } from "@tanstack/react-router";
+import { TanStackDevtools } from "@tanstack/react-devtools";
+import { aiDevtoolsPlugin } from "@tanstack/react-ai-devtools";
 import { NavLink } from "../components/NavLink";
 import ClassicChat from "../features/chat/ClassicChat";
 import TanstackChat from "../features/chat/TanstackChat";
@@ -21,6 +23,13 @@ function RootLayout() {
       </nav>
 
       <Outlet />
+
+      {/* Dev-only inspector for the TanStack AI chat (runs, stream events, tool calls).
+          Gated on import.meta.env.DEV so Vite tree-shakes it out of the production build
+          that ships to the backend's wwwroot. */}
+      {import.meta.env.DEV && (
+        <TanStackDevtools plugins={[aiDevtoolsPlugin()]} />
+      )}
     </main>
   );
 }

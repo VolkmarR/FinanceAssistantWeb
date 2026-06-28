@@ -14,6 +14,7 @@ import { AgentMessage } from "./AgentMessage";
 export default function TanstackChat() {
   const { messages, sendMessage, isLoading, error, addToolApprovalResponse } = useChat({
     connection: fetchServerSentEvents("/api/agui"),
+    devtools: { name: "Finance Assistant" },
   });
 
   return (
