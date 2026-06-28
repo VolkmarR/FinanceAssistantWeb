@@ -28,6 +28,27 @@ A personal finance assistant agent built with .NET 10. Throughout the workshop, 
 3. From the repo root, `dotnet build` (or open `FinanceAssistant.sln` in your IDE). You should see `Build succeeded.` with zero warnings.
 4. Optional smoke test: `dotnet run --project src/FinanceAssistant`. The REPL should start and echo whatever you type. Type `exit` to quit.
 
+## Running the web app in development
+
+The web build runs as **two processes**: the ASP.NET backend (the API) and the Vite dev server (the React SPA). In development Vite proxies every `/api/*` request to the backend at `http://localhost:5000` (see `src/frontend/vite.config.ts`). If the backend isn't listening on that port, those proxied calls fail with `ECONNREFUSED` / **502 Bad Gateway**. Two things must line up: the backend must be running, and the proxy `target` must match the port it actually binds.
+
+> **Port note:** Kestrel's default is `http://localhost:5000`, which is what `dotnet run` uses here. The `launchSettings.json` profile lists `5179`; if you launch via that profile (some IDEs) the backend binds 5179 instead — in that case set the proxy `target` in `vite.config.ts` to `5179`, or force the port with `ASPNETCORE_URLS=http://localhost:5000 dotnet run --project src/FinanceAssistant`. The rule is simply: **proxy target == backend port.**
+
+Start them in this order:
+
+1. **Postgres** — from the repo root: `docker compose up -d`. Verify with `docker compose ps` (`finance-assistant-postgres` healthy). The backend's startup warm-up creates the schema and will fail without it.
+2. **Azure OpenAI secrets** — make sure `AzureOpenAI:Endpoint`, `AzureOpenAI:ApiKey`, `AzureOpenAI:Deployment`, and `AzureOpenAI:EmbeddingDeployment` are set via `dotnet user-secrets` (see [`docs/exercises/p1-01-configure-azure.md`](docs/exercises/p1-01-configure-azure.md)). The backend throws on startup if any are missing.
+3. **Backend** — from the repo root: `dotnet run --project src/FinanceAssistant` (or run it from your IDE). Wait until the log shows `Now listening on: http://localhost:5000` (the port the Vite proxy targets).
+4. **Frontend** — in a second terminal:
+   ```bash
+   cd src/frontend
+   pnpm install   # first time only
+   pnpm dev
+   ```
+   Open the Vite URL it prints (`http://localhost:5173`). `/api/*` calls now proxy to the running backend, so the chat works with no 502.
+
+> For a production-style run instead, `pnpm build` (in `src/frontend`) emits the SPA into `src/FinanceAssistant/wwwroot`, and `dotnet run --project src/FinanceAssistant` then serves both the API and the SPA same-origin on `http://localhost:5000` — no Vite, no proxy.
+
 ## Repo layout
 
 - [`src/FinanceAssistant/`](src/FinanceAssistant): the agent. A single .NET 10 console app holding the domain (Models, Data, Services), the REPL (Program.cs), and the system prompt (`Prompts/SystemPrompt.md`). Evolves in place across all six pillars.
