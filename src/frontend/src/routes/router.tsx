@@ -3,11 +3,11 @@ import {
   createRoute,
   createRouter,
   redirect,
-  Link,
   Outlet,
 } from "@tanstack/react-router";
-import ClassicChat from "./ClassicChat";
-import TanstackChat from "./TanstackChat";
+import { NavLink } from "../components/NavLink";
+import ClassicChat from "../features/chat/ClassicChat";
+import TanstackChat from "../features/chat/TanstackChat";
 
 // Shared page chrome: title + the version switcher, then the active chat below.
 function RootLayout() {
@@ -16,29 +16,14 @@ function RootLayout() {
       <h1 className="mb-4 text-2xl font-bold tracking-tight text-slate-900">Finance Assistant</h1>
 
       <nav className="mb-4 flex gap-2">
-        <Link to="/chat" className={navLinkClasses} activeProps={{ className: activeNavLinkClasses }}>
-          Classic
-        </Link>
-        <Link
-          to="/chat-agui"
-          className={navLinkClasses}
-          activeProps={{ className: activeNavLinkClasses }}
-        >
-          TanStack AI
-        </Link>
+        <NavLink to="/chat">Classic</NavLink>
+        <NavLink to="/chat-agui">TanStack AI</NavLink>
       </nav>
 
       <Outlet />
     </main>
   );
 }
-
-// Base + active nav link styling. activeProps merges these classes onto the active
-// link, so the active treatment overrides the base background/border/text colors.
-const navLinkClasses =
-  "rounded-lg border border-slate-200 px-3 py-1.5 text-slate-900 no-underline transition-colors hover:bg-slate-100";
-
-const activeNavLinkClasses = "border-blue-600 bg-blue-600 text-white hover:bg-blue-600";
 
 const rootRoute = createRootRoute({ component: RootLayout });
 
