@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { bubbleClasses, buttonClasses, rowClasses } from "./ui";
 
 type Role = "user" | "assistant";
 interface Message {
@@ -70,33 +71,29 @@ export default function ClassicChat() {
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-        {messages.map((m, i) => (
-          <div key={i} style={{ textAlign: m.role === "user" ? "right" : "left" }}>
-            <span
-              style={{
-                display: "inline-block",
-                padding: "8px 12px",
-                borderRadius: 8,
-                whiteSpace: "pre-wrap",
-                background: m.role === "user" ? "#2563eb" : "#f1f5f9",
-                color: m.role === "user" ? "#fff" : "#0f172a",
-              }}
-            >
-              {m.content || (busy ? "…" : "")}
-            </span>
-          </div>
-        ))}
+      <div className="mb-4 flex flex-col gap-3">
+        {messages.map((m, i) => {
+          const isUser = m.role === "user";
+          return (
+            <div key={i} className={rowClasses(isUser)}>
+              <span className={bubbleClasses(isUser)}>{m.content || (busy ? "…" : "")}</span>
+            </div>
+          );
+        })}
       </div>
 
-      <form onSubmit={send} style={{ display: "flex", gap: 8 }}>
+      <form onSubmit={send} className="flex gap-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about your spending…"
-          style={{ flex: 1, padding: 8 }}
+          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/30"
         />
-        <button type="submit" disabled={busy}>
+        <button
+          type="submit"
+          disabled={busy}
+          className={buttonClasses("primary")}
+        >
           Send
         </button>
       </form>

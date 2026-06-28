@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* Global page chrome. Tailwind v4 resets margins and exposes every theme value as a
+   CSS variable, so set the page background and default font here once instead of
+   inline on the layout's <main>. */
+@layer base {
+  body {
+    font-family: system-ui, sans-serif;
+    background-color: var(--color-slate-50);
+    color: var(--color-slate-900);
+  }
+}

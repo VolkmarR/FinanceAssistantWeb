@@ -12,14 +12,18 @@ import TanstackChat from "./TanstackChat";
 // Shared page chrome: title + the version switcher, then the active chat below.
 function RootLayout() {
   return (
-    <main style={{ maxWidth: 640, margin: "0 auto", padding: 16, fontFamily: "system-ui, sans-serif" }}>
-      <h1>Finance Assistant</h1>
+    <main className="mx-auto max-w-2xl p-4">
+      <h1 className="mb-4 text-2xl font-bold tracking-tight text-slate-900">Finance Assistant</h1>
 
-      <nav style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <Link to="/chat" style={navLinkStyle} activeProps={{ style: activeNavLinkStyle }}>
+      <nav className="mb-4 flex gap-2">
+        <Link to="/chat" className={navLinkClasses} activeProps={{ className: activeNavLinkClasses }}>
           Classic
         </Link>
-        <Link to="/chat-agui" style={navLinkStyle} activeProps={{ style: activeNavLinkStyle }}>
+        <Link
+          to="/chat-agui"
+          className={navLinkClasses}
+          activeProps={{ className: activeNavLinkClasses }}
+        >
           TanStack AI
         </Link>
       </nav>
@@ -29,19 +33,12 @@ function RootLayout() {
   );
 }
 
-const navLinkStyle: React.CSSProperties = {
-  padding: "6px 12px",
-  borderRadius: 8,
-  border: "1px solid #e2e8f0",
-  textDecoration: "none",
-  color: "#0f172a",
-};
+// Base + active nav link styling. activeProps merges these classes onto the active
+// link, so the active treatment overrides the base background/border/text colors.
+const navLinkClasses =
+  "rounded-lg border border-slate-200 px-3 py-1.5 text-slate-900 no-underline transition-colors hover:bg-slate-100";
 
-const activeNavLinkStyle: React.CSSProperties = {
-  background: "#2563eb",
-  borderColor: "#2563eb",
-  color: "#fff",
-};
+const activeNavLinkClasses = "border-blue-600 bg-blue-600 text-white hover:bg-blue-600";
 
 const rootRoute = createRootRoute({ component: RootLayout });
 

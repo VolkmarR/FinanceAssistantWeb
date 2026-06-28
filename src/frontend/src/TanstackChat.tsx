@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useChat, fetchServerSentEvents, type UIMessage } from "@tanstack/ai-react";
+import { bubbleClasses, buttonClasses, rowClasses } from "./ui";
 
 // The AG-UI version of the chat. Instead of hand-parsing a text stream, it lets
 // TanStack AI's useChat drive the conversation. The fetchServerSentEvents adapter
@@ -27,28 +28,32 @@ export default function TanstackChat() {
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+      <div className="mb-4 flex flex-col gap-3">
         {messages.map((m) => (
           <MessageRow key={m.id} message={m} onApprove={addToolApprovalResponse} />
         ))}
-        {isLoading && <div style={{ color: "#64748b" }}>…</div>}
+        {isLoading && <div className="text-slate-500">…</div>}
       </div>
 
       {error && (
-        <p role="alert" style={{ color: "#b91c1c", marginBottom: 12 }}>
+        <p role="alert" className="mb-3 text-red-700">
           ⚠️ {error.message}
         </p>
       )}
 
-      <form onSubmit={send} style={{ display: "flex", gap: 8 }}>
+      <form onSubmit={send} className="flex gap-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about your spending…"
-          style={{ flex: 1, padding: 8 }}
+          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/30 disabled:opacity-50"
           disabled={isLoading}
         />
-        <button type="submit" disabled={isLoading}>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className={buttonClasses("primary")}
+        >
           Send
         </button>
       </form>
@@ -71,29 +76,19 @@ function MessageRow({
   const isUser = message.role === "user";
 
   return (
-    <div style={{ textAlign: isUser ? "right" : "left" }}>
+    <div className={rowClasses(isUser)}>
       {message.parts.map((part, idx) => {
         switch (part.type) {
           case "text":
             return (
-              <span
-                key={idx}
-                style={{
-                  display: "inline-block",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  whiteSpace: "pre-wrap",
-                  background: isUser ? "#2563eb" : "#f1f5f9",
-                  color: isUser ? "#fff" : "#0f172a",
-                }}
-              >
+              <span key={idx} className={bubbleClasses(isUser)}>
                 {part.content}
               </span>
             );
 
           case "thinking":
             return (
-              <div key={idx} style={{ fontSize: 13, fontStyle: "italic", color: "#64748b" }}>
+              <div key={idx} className="text-[13px] italic text-slate-500">
                 💭 {part.content}
               </div>
             );
@@ -102,37 +97,32 @@ function MessageRow({
             return (
               <div
                 key={idx}
-                style={{
-                  display: "inline-block",
-                  textAlign: "left",
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #e2e8f0",
-                  background: "#fffbeb",
-                  color: "#0f172a",
-                  fontSize: 13,
-                }}
+                className="inline-block rounded-lg border border-slate-200 bg-amber-50 px-3 py-2 text-left text-[13px] text-slate-900 shadow-sm"
               >
-                <div style={{ fontWeight: 600 }}>🛠️ {part.name}</div>
+                <div className="font-semibold">🛠️ {part.name}</div>
                 {part.arguments && (
-                  <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", fontSize: 12 }}>
-                    {part.arguments}
-                  </pre>
+                  <pre className="mt-1 whitespace-pre-wrap text-xs">{part.arguments}</pre>
                 )}
 
                 {part.state === "approval-requested" && part.approval && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <button onClick={() => void onApprove({ id: part.approval!.id, approved: true })}>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      onClick={() => void onApprove({ id: part.approval!.id, approved: true })}
+                      className={buttonClasses("primary", "sm")}
+                    >
                       Approve
                     </button>
-                    <button onClick={() => void onApprove({ id: part.approval!.id, approved: false })}>
+                    <button
+                      onClick={() => void onApprove({ id: part.approval!.id, approved: false })}
+                      className={buttonClasses("secondary", "sm")}
+                    >
                       Deny
                     </button>
                   </div>
                 )}
 
                 {part.state === "approval-responded" && (
-                  <div style={{ marginTop: 6, color: "#64748b" }}>
+                  <div className="mt-1.5 text-slate-500">
                     {part.approval?.approved ? "✅ Approved" : "🚫 Denied"}
                   </div>
                 )}
