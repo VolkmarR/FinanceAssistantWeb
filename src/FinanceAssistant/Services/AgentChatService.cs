@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using FinanceAssistant.Telemetry;
 using FinanceAssistant.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -13,7 +14,8 @@ namespace FinanceAssistant.Services;
 // Sessions are kept only in process memory — there is no persistence yet (a later pillar).
 public sealed class AgentChatService
 {
-    private readonly ChatClientAgent _agent;
+    // OpenTelemetryAgent (an AIAgent) wrapping the ChatClientAgent — emits a span per agent run.
+    private readonly AIAgent _agent;
     private readonly ConcurrentDictionary<string, AgentSession> _sessions = new();
 
     // Exposed so the AG-UI endpoint can host the same configured agent (tools, prompt, approvals).
@@ -36,21 +38,26 @@ public sealed class AgentChatService
             Path.Combine(AppContext.BaseDirectory, "Prompts", "SystemPrompt.md"));
 
         _agent = new ChatClientAgent(
-            chatClient,
-            systemPrompt,
-            name: "FinanceAssistant",
-            description: "Personal finance assistant",
-            tools:
-            [
-                AIFunctionFactory.Create(convertCurrency.Convert),
-                AIFunctionFactory.Create(getCurrentTime.GetCurrentTime),
-                AIFunctionFactory.Create(getTransactions.GetTransactions),
-                AIFunctionFactory.Create(searchTransactions.SearchTransactions),
-                AIFunctionFactory.Create(importStatementTool.ImportStatement),
-                AIFunctionFactory.Create(importXmlStatementTool.ImportXmlStatement),
-                AIFunctionFactory.Create(importXlsxStatementTool.ImportXlsxStatement),
-                new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
-            ]);
+                chatClient,
+                systemPrompt,
+                name: "FinanceAssistant",
+                description: "Personal finance assistant",
+                tools:
+                [
+                    AIFunctionFactory.Create(convertCurrency.Convert),
+                    AIFunctionFactory.Create(getCurrentTime.GetCurrentTime),
+                    AIFunctionFactory.Create(getTransactions.GetTransactions),
+                    AIFunctionFactory.Create(searchTransactions.SearchTransactions),
+                    AIFunctionFactory.Create(importStatementTool.ImportStatement),
+                    AIFunctionFactory.Create(importXmlStatementTool.ImportXmlStatement),
+                    AIFunctionFactory.Create(importXlsxStatementTool.ImportXlsxStatement),
+                    new ApprovalRequiredAIFunction(AIFunctionFactory.Create(transferFunds.Transfer))
+                ])
+            // Wrap the agent so each run (including the tool loop) produces a telemetry span.
+            // EnableSensitiveData surfaces prompt/response/tool-argument text in the dashboard.
+            .AsBuilder()
+            .UseOpenTelemetry(AppTelemetry.SourceName, a => a.EnableSensitiveData = true)
+            .Build();
     }
 
     // Streams the assistant's reply for one turn, yielding text chunks as they arrive.

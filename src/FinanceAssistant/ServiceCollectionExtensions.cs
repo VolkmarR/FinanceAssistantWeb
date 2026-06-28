@@ -1,4 +1,5 @@
 ﻿using System.ClientModel;
+using FinanceAssistant.Telemetry;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,11 +25,15 @@ public static class ServiceCollectionExtensions
                     new OpenAIClientOptions { Endpoint = apiBase })
                 .GetChatClient(deployment)
                 .AsIChatClient()
-                // Removed because we want to implement the agent loop ourselves
-                // .AsBuilder()
-                // .UseFunctionInvocation()
-                // .Build()
-            );
+                // OpenTelemetry traces every LLM call, including direct uses outside the agent
+                // loop (e.g. ImportStatementTool's CSV-format detection).
+                // NOTE: deliberately NOT calling .UseFunctionInvocation() — the agent loop is
+                // implemented manually; UseOpenTelemetry is orthogonal instrumentation.
+                .AsBuilder()
+                .UseOpenTelemetry(
+                    sourceName: AppTelemetry.SourceName,
+                    configure: c => c.EnableSensitiveData = true)
+                .Build());
     }
 
     public static IServiceCollection AddEmbeddingGenerator(this IServiceCollection services, IConfiguration config)
@@ -47,6 +52,9 @@ public static class ServiceCollectionExtensions
                     new ApiKeyCredential(apiKey),
                     new OpenAIClientOptions { Endpoint = apiBase })
                 .GetEmbeddingClient(embeddingDeployment)
-                .AsIEmbeddingGenerator());
+                .AsIEmbeddingGenerator()
+                .AsBuilder()
+                .UseOpenTelemetry(sourceName: AppTelemetry.SourceName)
+                .Build());
     }
 }

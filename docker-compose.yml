@@ -11,5 +11,17 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  # Standalone .NET Aspire Dashboard: an OTLP collector + trace/metric/log viewer.
+  # The backend runs on the host and exports telemetry to the OTLP endpoint below.
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:9.5
+    container_name: finance-assistant-aspire
+    environment:
+      # Local dev only: skip the login-token requirement. Do not use unsecured in shared/prod.
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "18888:18888"   # Dashboard web UI  -> http://localhost:18888
+      - "18889:18889"   # OTLP/gRPC ingestion endpoint (OTEL_EXPORTER_OTLP_ENDPOINT)
+
 volumes:
   postgres-data:

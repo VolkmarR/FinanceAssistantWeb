@@ -1,9 +1,15 @@
 using System.Text.Json;
 using FinanceAssistant.Data;
 using FinanceAssistant.Services;
+using FinanceAssistant.Telemetry;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Npgsql;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Pgvector;
 
 const string DevCorsPolicy = "ViteDev";
@@ -14,6 +20,31 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
+
+// OpenTelemetry: traces, metrics, and logs exported over OTLP to the Aspire dashboard.
+// The OTLP endpoint comes from OTEL_EXPORTER_OTLP_ENDPOINT (see launchSettings.json), so
+// there is no hard-coded URL here. Agent/chat/embedding spans flow through AppTelemetry.SourceName.
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService(AppTelemetry.ServiceName))
+    .WithTracing(t => t
+        .AddSource(AppTelemetry.SourceName)     // agent run + LLM + embedding spans (GenAI conventions)
+        .AddAspNetCoreInstrumentation()         // incoming /api/chat, /api/agui requests
+        .AddHttpClientInstrumentation()         // outbound Azure OpenAI HTTP calls
+        .AddNpgsql()                            // Postgres/pgvector queries
+        .AddOtlpExporter())
+    .WithMetrics(m => m
+        .AddMeter(AppTelemetry.SourceName)      // GenAI token usage / operation duration
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddOtlpExporter());
+
+builder.Logging.AddOpenTelemetry(o =>
+{
+    o.IncludeFormattedMessage = true;
+    o.IncludeScopes = true;
+    o.AddOtlpExporter();
+});
 
 // Reuse the existing DI extensions unchanged (ServiceCollectionExtensions.cs).
 builder.Services.AddChatClient(builder.Configuration);
